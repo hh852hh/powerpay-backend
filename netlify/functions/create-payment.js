@@ -88,7 +88,8 @@ exports.handler = async (event, context) => {
     
     console.log('✅ 生成的簽名:', sign);
     
-    filteredParams.sign = sign;
+    // 使用 signData 而不是 sign (PowerPay 的要求)
+    filteredParams.signData = sign;
 
     // 轉換為 JSON 格式
     const postData = JSON.stringify(filteredParams);
