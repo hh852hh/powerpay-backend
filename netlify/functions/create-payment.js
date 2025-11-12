@@ -34,12 +34,16 @@ exports.handler = async (event, context) => {
     console.log('🔐 MD5 Key:', MD5_KEY);
     console.log('🌐 API URL:', API_URL);
 
-    // 構建參數
+    // 構建參數 - 添加必需的 service 參數
     const params = {
+      service: requestData.payType === 'ALIPAY' ? 'pay.alipay.native' : 'pay.unionpay.native',
+      version: '1.0',
+      charset: 'UTF-8',
       merchantNo: MERCHANT_NO,
       orderNo: requestData.orderNo,
       amount: String(requestData.amount),
       subject: requestData.subject,
+      body: requestData.subject,
       payType: requestData.payType,
       frontUrl: requestData.frontUrl,
       notifyUrl: requestData.notifyUrl,
@@ -141,9 +145,9 @@ exports.handler = async (event, context) => {
       req.end();
     });
 
-    // 如果簽名驗證失敗，返回調試信息
-    if (result.code === '96') {
-      console.error('❌ 簽名驗證失敗！返回調試信息...');
+    // 如果有錯誤，返回調試信息
+    if (result.code !== '00') {
+      console.error(`❌ PowerPay 錯誤 (${result.code}): ${result.msg}`);
       return {
         statusCode: 200,
         headers,
@@ -154,7 +158,6 @@ exports.handler = async (event, context) => {
             sign: sign,
             params: filteredParams,
             merchantNo: MERCHANT_NO,
-            mdkKeyLength: MD5_KEY.length,
             apiUrl: API_URL,
           }
         }),
