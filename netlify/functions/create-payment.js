@@ -34,9 +34,14 @@ exports.handler = async (event, context) => {
     console.log('🔐 MD5 Key:', MD5_KEY);
     console.log('🌐 API URL:', API_URL);
 
-    // 構建參數 - 添加必需的 service 參數
+    // 確定服務類型和支付類型
+    const isAlipay = requestData.payType === 'ALIPAY';
+    const service = isAlipay ? 'trade.jsPay' : 'secure.pay';
+    const payType = isAlipay ? 'ALIPAY' : 'UNIONPAY_INTL';
+
+    // 構建參數
     const params = {
-      service: requestData.payType === 'ALIPAY' ? 'pay.alipay.native' : 'pay.unionpay.native',
+      service: service,
       version: '1.0',
       charset: 'UTF-8',
       merchantNo: MERCHANT_NO,
@@ -44,13 +49,13 @@ exports.handler = async (event, context) => {
       amount: String(requestData.amount),
       subject: requestData.subject,
       body: requestData.subject,
-      payType: requestData.payType,
+      payType: payType,
       frontUrl: requestData.frontUrl,
       notifyUrl: requestData.notifyUrl,
     };
 
     // UnionPay 卡片信息
-    if (requestData.payType === 'UNIONPAY') {
+    if (!isAlipay) {
       if (requestData.cardNo) params.cardNo = requestData.cardNo;
       if (requestData.cardHolder) params.cardHolder = requestData.cardHolder;
       if (requestData.expireMonth) params.expireMonth = requestData.expireMonth;
