@@ -1,5 +1,8 @@
 const crypto = require('crypto');
-const axios = require('axios');
+const https = require('https');
+const { URLSearchParams } = require('url');
+
+// 移除 const axios = require('axios');
 
 exports.handler = async (event, context) => {
   const headers = {
