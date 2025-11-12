@@ -2,8 +2,6 @@ const crypto = require('crypto');
 const https = require('https');
 const { URLSearchParams } = require('url');
 
-// 移除 const axios = require('axios');
-
 exports.handler = async (event, context) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -34,7 +32,7 @@ exports.handler = async (event, context) => {
     const API_URL = 'https://uat.powerpaygroup.com/gateway/pay';
 
     console.log('🔑 商戶號:', MERCHANT_NO);
-    console.log('🔐 MD5 Key:', MD5_KEY); // 完整顯示以確認
+    console.log('🔐 MD5 Key:', MD5_KEY);
     console.log('🌐 API URL:', API_URL);
 
     // 構建參數
@@ -59,85 +57,109 @@ exports.handler = async (event, context) => {
 
     console.log('📦 原始參數:', JSON.stringify(params, null, 2));
 
-    // ===== 方法 1: 不編碼 URL =====
-    console.log('\n===== 嘗試方法 1: URL 不編碼 =====');
-    const params1 = { ...params };
-    const sortedKeys1 = Object.keys(params1).sort();
-    const signString1 = sortedKeys1
-      .map(key => `${key}=${params1[key]}`)
-      .join('&') + `&key=${MD5_KEY}`;
-    const sign1 = crypto.createHash('md5').update(signString1, 'utf8').digest('hex').toUpperCase();
-    
-    console.log('🔐 簽名字符串 1:', signString1);
-    console.log('✅ 簽名 1:', sign1);
-
-    // ===== 方法 2: URL 編碼（僅對值） =====
-    console.log('\n===== 嘗試方法 2: URL 編碼值 =====');
-    const params2 = {};
+    // 生成簽名
+    const filteredParams = {};
     Object.keys(params).forEach(key => {
-      params2[key] = encodeURIComponent(params[key]);
+      if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+        filteredParams[key] = params[key];
+      }
     });
-    const sortedKeys2 = Object.keys(params2).sort();
-    const signString2 = sortedKeys2
-      .map(key => `${key}=${params2[key]}`)
-      .join('&') + `&key=${MD5_KEY}`;
-    const sign2 = crypto.createHash('md5').update(signString2, 'utf8').digest('hex').toUpperCase();
-    
-    console.log('🔐 簽名字符串 2:', signString2);
-    console.log('✅ 簽名 2:', sign2);
 
-    // ===== 方法 3: 簽名前先解碼值 =====
-    console.log('\n===== 嘗試方法 3: 原始值簽名 =====');
-    const sortedKeys3 = Object.keys(params).sort();
-    const signString3 = sortedKeys3
-      .map(key => `${key}=${params[key]}`)
+    const sortedKeys = Object.keys(filteredParams).sort();
+    const signString = sortedKeys
+      .map(key => `${key}=${filteredParams[key]}`)
       .join('&') + `&key=${MD5_KEY}`;
-    const sign3 = crypto.createHash('md5').update(signString3, 'utf8').digest('hex').toUpperCase();
     
-    console.log('🔐 簽名字符串 3:', signString3);
-    console.log('✅ 簽名 3:', sign3);
-
-    // 使用方法 1（不編碼）發送請求
-    const finalParams = { ...params, sign: sign1 };
+    console.log('🔐 待簽名字符串:', signString);
+    
+    const sign = crypto
+      .createHash('md5')
+      .update(signString, 'utf8')
+      .digest('hex')
+      .toUpperCase();
+    
+    console.log('✅ 生成的簽名:', sign);
+    
+    filteredParams.sign = sign;
 
     // 轉換為 form-urlencoded
     const formData = new URLSearchParams();
-    Object.keys(finalParams).forEach(key => {
-      formData.append(key, finalParams[key]);
+    Object.keys(filteredParams).forEach(key => {
+      formData.append(key, filteredParams[key]);
+    });
+    const postData = formData.toString();
+
+    console.log('🚀 發送請求到:', API_URL);
+    console.log('📤 請求體:', postData);
+
+    // 使用原生 https 模塊發送請求
+    const result = await new Promise((resolve, reject) => {
+      const url = new URL(API_URL);
+      
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData),
+          'Accept': 'application/json',
+        },
+        timeout: 30000,
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          console.log('📥 HTTP 狀態:', res.statusCode);
+          console.log('📥 原始響應:', data);
+          
+          try {
+            const jsonData = JSON.parse(data);
+            console.log('📥 PowerPay 響應 (JSON):', JSON.stringify(jsonData, null, 2));
+            resolve(jsonData);
+          } catch (e) {
+            console.error('❌ JSON 解析失敗:', e.message);
+            resolve({ code: '99', msg: 'Invalid response', raw: data });
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.error('❌ 請求錯誤:', error.message);
+        reject(error);
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      });
+
+      req.write(postData);
+      req.end();
     });
 
-    console.log('\n🚀 發送請求到:', API_URL);
-    console.log('📤 最終參數:', finalParams);
-
-    // 調用 API
-    const response = await axios.post(API_URL, formData.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-      },
-      timeout: 30000,
-      validateStatus: () => true,
-    });
-
-    console.log('📥 HTTP 狀態:', response.status);
-    console.log('📥 PowerPay 響應:', JSON.stringify(response.data, null, 2));
-
-    // 如果失敗，返回所有調試信息
-    if (response.data.code !== '00') {
+    // 如果簽名驗證失敗，返回調試信息
+    if (result.code === '96') {
+      console.error('❌ 簽名驗證失敗！返回調試信息...');
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          ...response.data,
+          ...result,
           debug: {
-            sign1: sign1,
-            sign2: sign2,
-            sign3: sign3,
-            signString1: signString1,
-            signString2: signString2,
-            signString3: signString3,
+            signString: signString,
+            sign: sign,
+            params: filteredParams,
             merchantNo: MERCHANT_NO,
             mdkKeyLength: MD5_KEY.length,
+            apiUrl: API_URL,
           }
         }),
       };
@@ -146,7 +168,7 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(response.data),
+      body: JSON.stringify(result),
     };
 
   } catch (error) {
