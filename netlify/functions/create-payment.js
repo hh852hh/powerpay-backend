@@ -29,11 +29,8 @@ exports.handler = async (event, context) => {
     // 確定服務類型和支付類型
     const isAlipay = requestData.payType === 'ALIPAY';
     
-    // PowerPay 配置 - 根據支付方式選擇商戶號
-    const MERCHANT_NO = isAlipay 
-      ? (process.env.POWERPAY_ALIPAY_MERCHANT_NO || '606034459212007')
-      : (process.env.POWERPAY_UNIONPAY_MERCHANT_NO || '572034459212008');
-    
+    // PowerPay 配置 - 使用統一的商戶號
+    const MERCHANT_NO = process.env.POWERPAY_MERCHANT_NO || '10088891';
     const MD5_KEY = process.env.POWERPAY_MD5_KEY || '94ed508f4bc242b88ddd0f0d644ebe7a';
     const API_URL = 'https://www.powerpayhk.com/hkpay/native/service';
 
