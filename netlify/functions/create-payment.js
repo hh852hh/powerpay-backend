@@ -27,12 +27,12 @@ exports.handler = async (event, context) => {
     // ===== PowerPay 配置 =====
     const MERCHANT_NO = process.env.POWERPAY_MERCHANT_NO || '300000004';
     const MD5_KEY = process.env.POWERPAY_MD5_KEY || '94ed508f4bc242b88ddd0f0d644ebe7a';
-    const API_URL = 'https://uat.powerpaygroup.com/gateway/pay'; // UAT 環境
+    const API_URL = 'https://uat.powerpaygroup.com/gateway/pay';
 
     console.log('🔑 商戶號:', MERCHANT_NO);
     console.log('🔐 MD5 Key 長度:', MD5_KEY.length);
 
-    // ===== 構建 PowerPay 參數（只包含必需的） =====
+    // ===== 構建 PowerPay 參數 =====
     const params = {
       merchantNo: MERCHANT_NO,
       orderNo: requestData.orderNo,
@@ -55,7 +55,6 @@ exports.handler = async (event, context) => {
     console.log('📦 PowerPay 參數（簽名前）:', JSON.stringify(params, null, 2));
 
     // ===== 生成簽名 =====
-    // 1. 過濾掉空值
     const filteredParams = {};
     Object.keys(params).forEach(key => {
       if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
@@ -63,17 +62,13 @@ exports.handler = async (event, context) => {
       }
     });
 
-    // 2. 按 key 字母順序排序
     const sortedKeys = Object.keys(filteredParams).sort();
-    
-    // 3. 拼接簽名字符串: key1=value1&key2=value2&...&key=MD5_KEY
     const signString = sortedKeys
       .map(key => `${key}=${filteredParams[key]}`)
       .join('&') + `&key=${MD5_KEY}`;
     
     console.log('🔐 待簽名字符串:', signString);
     
-    // 4. 生成 MD5 簽名（大寫）
     const sign = crypto
       .createHash('md5')
       .update(signString, 'utf8')
@@ -82,25 +77,47 @@ exports.handler = async (event, context) => {
     
     console.log('✅ 生成的簽名:', sign);
     
-    // 5. 添加簽名到參數
     filteredParams.sign = sign;
 
-    // ===== 調用 PowerPay API =====
-    console.log('🚀 調用 PowerPay API:', API_URL);
-    console.log('📤 完整請求參數:', JSON.stringify(filteredParams, null, 2));
+    // ===== 轉換為 form-urlencoded 格式 =====
+    const formBody = Object.keys(filteredParams)
+      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(filteredParams[key])}`)
+      .join('&');
 
+    console.log('🚀 調用 PowerPay API:', API_URL);
+    console.log('📤 發送格式: application/x-www-form-urlencoded');
+    console.log('📤 完整請求體:', formBody);
+
+    // ===== 調用 PowerPay API（使用 form-urlencoded）=====
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
       },
-      body: JSON.stringify(filteredParams),
+      body: formBody,
     });
 
-    const result = await response.json();
-    console.log('📥 PowerPay 響應:', JSON.stringify(result, null, 2));
+    const responseText = await response.text();
+    console.log('📥 PowerPay 原始響應:', responseText);
 
-    // 返回結果
+    let result;
+    try {
+      result = JSON.parse(responseText);
+      console.log('📥 PowerPay 響應 (JSON):', JSON.stringify(result, null, 2));
+    } catch (e) {
+      console.error('❌ 解析響應失敗，返回原始文本');
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          code: '99',
+          msg: 'Invalid response from PowerPay',
+          raw: responseText,
+        }),
+      };
+    }
+
     return {
       statusCode: 200,
       headers,
