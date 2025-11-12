@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const axios = require('axios');
 
 exports.handler = async (event, context) => {
   const headers = {
@@ -24,15 +25,16 @@ exports.handler = async (event, context) => {
     const requestData = JSON.parse(event.body);
     console.log('📥 收到前端請求:', JSON.stringify(requestData, null, 2));
 
-    // ===== PowerPay 配置 =====
+    // PowerPay 配置
     const MERCHANT_NO = process.env.POWERPAY_MERCHANT_NO || '300000004';
     const MD5_KEY = process.env.POWERPAY_MD5_KEY || '94ed508f4bc242b88ddd0f0d644ebe7a';
     const API_URL = 'https://uat.powerpaygroup.com/gateway/pay';
 
     console.log('🔑 商戶號:', MERCHANT_NO);
     console.log('🔐 MD5 Key 長度:', MD5_KEY.length);
+    console.log('🌐 API URL:', API_URL);
 
-    // ===== 構建 PowerPay 參數 =====
+    // 構建參數
     const params = {
       merchantNo: MERCHANT_NO,
       orderNo: requestData.orderNo,
@@ -43,7 +45,7 @@ exports.handler = async (event, context) => {
       notifyUrl: requestData.notifyUrl,
     };
 
-    // UnionPay 卡片信息（如果有）
+    // UnionPay 卡片信息
     if (requestData.payType === 'UNIONPAY') {
       if (requestData.cardNo) params.cardNo = requestData.cardNo;
       if (requestData.cardHolder) params.cardHolder = requestData.cardHolder;
@@ -54,7 +56,7 @@ exports.handler = async (event, context) => {
 
     console.log('📦 PowerPay 參數（簽名前）:', JSON.stringify(params, null, 2));
 
-    // ===== 生成簽名 =====
+    // 生成簽名
     const filteredParams = {};
     Object.keys(params).forEach(key => {
       if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
@@ -79,60 +81,55 @@ exports.handler = async (event, context) => {
     
     filteredParams.sign = sign;
 
-    // ===== 轉換為 form-urlencoded 格式 =====
-    const formBody = Object.keys(filteredParams)
-      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(filteredParams[key])}`)
-      .join('&');
+    // 轉換為 URLSearchParams（form-urlencoded）
+    const formData = new URLSearchParams();
+    Object.keys(filteredParams).forEach(key => {
+      formData.append(key, filteredParams[key]);
+    });
 
     console.log('🚀 調用 PowerPay API:', API_URL);
-    console.log('📤 發送格式: application/x-www-form-urlencoded');
-    console.log('📤 完整請求體:', formBody);
+    console.log('📤 請求參數:', filteredParams);
 
-    // ===== 調用 PowerPay API（使用 form-urlencoded）=====
-    const response = await fetch(API_URL, {
-      method: 'POST',
+    // 使用 axios 調用 API
+    const response = await axios.post(API_URL, formData.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json',
       },
-      body: formBody,
+      timeout: 30000, // 30秒超時
+      validateStatus: () => true, // 接受所有狀態碼
     });
 
-    const responseText = await response.text();
-    console.log('📥 PowerPay 原始響應:', responseText);
-
-    let result;
-    try {
-      result = JSON.parse(responseText);
-      console.log('📥 PowerPay 響應 (JSON):', JSON.stringify(result, null, 2));
-    } catch (e) {
-      console.error('❌ 解析響應失敗，返回原始文本');
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          code: '99',
-          msg: 'Invalid response from PowerPay',
-          raw: responseText,
-        }),
-      };
-    }
+    console.log('📥 HTTP 狀態碼:', response.status);
+    console.log('📥 PowerPay 響應:', JSON.stringify(response.data, null, 2));
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(result),
+      body: JSON.stringify(response.data),
     };
 
   } catch (error) {
-    console.error('❌ 錯誤:', error.message);
-    console.error('❌ 堆疊:', error.stack);
+    console.error('❌ 錯誤類型:', error.constructor.name);
+    console.error('❌ 錯誤信息:', error.message);
+    console.error('❌ 錯誤堆疊:', error.stack);
+    
+    if (error.response) {
+      console.error('📥 錯誤響應狀態:', error.response.status);
+      console.error('📥 錯誤響應數據:', error.response.data);
+    }
+
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         error: error.message,
+        type: error.constructor.name,
         details: error.stack,
+        response: error.response ? {
+          status: error.response.status,
+          data: error.response.data,
+        } : null,
       }),
     };
   }
