@@ -1,6 +1,5 @@
 const crypto = require('crypto');
 const https = require('https');
-const querystring = require('querystring');
 
 exports.handler = async (event, context) => {
   const headers = {
@@ -29,7 +28,7 @@ exports.handler = async (event, context) => {
     // 確定服務類型和支付類型
     const isAlipay = requestData.payType === 'ALIPAY';
     
-    // PowerPay 配置 - 使用統一的商戶號
+    // PowerPay 配置
     const MERCHANT_NO = process.env.POWERPAY_MERCHANT_NO || '10088891';
     const MD5_KEY = process.env.POWERPAY_MD5_KEY || '94ed508f4bc242b88ddd0f0d644ebe7a';
     const API_URL = 'https://www.powerpayhk.com/hkpay/native/service';
@@ -91,14 +90,14 @@ exports.handler = async (event, context) => {
     
     console.log('✅ 生成的簽名:', sign);
     
-    // 使用 signData 而不是 sign (PowerPay 的要求)
+    // 使用 signData
     filteredParams.signData = sign;
 
-    // 轉換為 form-urlencoded 格式
-    const postData = querystring.stringify(filteredParams);
+    // 轉換為 JSON 格式 (不是 form-urlencoded)
+    const postData = JSON.stringify(filteredParams);
 
     console.log('🚀 發送請求到:', API_URL);
-    console.log('📤 請求體 (form-urlencoded):', postData);
+    console.log('📤 請求體 (JSON):', postData);
 
     // 使用原生 https 模塊發送請求
     const result = await new Promise((resolve, reject) => {
@@ -110,7 +109,7 @@ exports.handler = async (event, context) => {
         path: url.pathname,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
           'Accept': 'application/json',
         },
