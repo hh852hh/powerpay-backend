@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const https = require('https');
+const querystring = require('querystring');
 
 exports.handler = async (event, context) => {
   const headers = {
@@ -25,17 +26,22 @@ exports.handler = async (event, context) => {
     const requestData = JSON.parse(event.body);
     console.log('📥 收到前端請求:', JSON.stringify(requestData, null, 2));
 
-    // PowerPay 配置
-    const MERCHANT_NO = process.env.POWERPAY_MERCHANT_NO || '300000004';
+    // 確定服務類型和支付類型
+    const isAlipay = requestData.payType === 'ALIPAY';
+    
+    // PowerPay 配置 - 根據支付方式選擇商戶號
+    const MERCHANT_NO = isAlipay 
+      ? (process.env.POWERPAY_ALIPAY_MERCHANT_NO || '606034459212007')
+      : (process.env.POWERPAY_UNIONPAY_MERCHANT_NO || '572034459212008');
+    
     const MD5_KEY = process.env.POWERPAY_MD5_KEY || '94ed508f4bc242b88ddd0f0d644ebe7a';
     const API_URL = 'https://www.powerpayhk.com/hkpay/native/service';
 
+    console.log('🔑 支付方式:', isAlipay ? 'Alipay' : 'UnionPay');
     console.log('🔑 商戶號:', MERCHANT_NO);
     console.log('🔐 MD5 Key:', MD5_KEY);
     console.log('🌐 API URL:', API_URL);
 
-    // 確定服務類型和支付類型
-    const isAlipay = requestData.payType === 'ALIPAY';
     const service = isAlipay ? 'trade.jsPay' : 'secure.pay';
     const payType = isAlipay ? 'ALIPAY' : 'UNIONPAY_INTL';
 
@@ -91,11 +97,11 @@ exports.handler = async (event, context) => {
     // 使用 signData 而不是 sign (PowerPay 的要求)
     filteredParams.signData = sign;
 
-    // 轉換為 JSON 格式
-    const postData = JSON.stringify(filteredParams);
+    // 轉換為 form-urlencoded 格式
+    const postData = querystring.stringify(filteredParams);
 
     console.log('🚀 發送請求到:', API_URL);
-    console.log('📤 請求體 (JSON):', postData);
+    console.log('📤 請求體 (form-urlencoded):', postData);
 
     // 使用原生 https 模塊發送請求
     const result = await new Promise((resolve, reject) => {
@@ -107,7 +113,7 @@ exports.handler = async (event, context) => {
         path: url.pathname,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
           'Content-Length': Buffer.byteLength(postData),
           'Accept': 'application/json',
         },
