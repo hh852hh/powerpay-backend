@@ -1,6 +1,5 @@
 const crypto = require('crypto');
 const https = require('https');
-const { URLSearchParams } = require('url');
 
 exports.handler = async (event, context) => {
   const headers = {
@@ -29,7 +28,7 @@ exports.handler = async (event, context) => {
     // PowerPay 配置
     const MERCHANT_NO = process.env.POWERPAY_MERCHANT_NO || '300000004';
     const MD5_KEY = process.env.POWERPAY_MD5_KEY || '94ed508f4bc242b88ddd0f0d644ebe7a';
-    const API_URL = 'https://www.powerpayhk.com/hkpay/native/service';  // 嘗試香港環境
+    const API_URL = 'https://www.powerpayhk.com/hkpay/native/service';
 
     console.log('🔑 商戶號:', MERCHANT_NO);
     console.log('🔐 MD5 Key:', MD5_KEY);
@@ -82,15 +81,11 @@ exports.handler = async (event, context) => {
     
     filteredParams.sign = sign;
 
-    // 轉換為 form-urlencoded
-    const formData = new URLSearchParams();
-    Object.keys(filteredParams).forEach(key => {
-      formData.append(key, filteredParams[key]);
-    });
-    const postData = formData.toString();
+    // 轉換為 JSON 格式
+    const postData = JSON.stringify(filteredParams);
 
     console.log('🚀 發送請求到:', API_URL);
-    console.log('📤 請求體:', postData);
+    console.log('📤 請求體 (JSON):', postData);
 
     // 使用原生 https 模塊發送請求
     const result = await new Promise((resolve, reject) => {
@@ -102,7 +97,7 @@ exports.handler = async (event, context) => {
         path: url.pathname,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
           'Accept': 'application/json',
         },
@@ -118,6 +113,7 @@ exports.handler = async (event, context) => {
 
         res.on('end', () => {
           console.log('📥 HTTP 狀態:', res.statusCode);
+          console.log('📥 響應頭:', JSON.stringify(res.headers, null, 2));
           console.log('📥 原始響應:', data);
           
           try {
