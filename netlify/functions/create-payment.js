@@ -29,7 +29,7 @@ exports.handler = async (event, context) => {
     // PowerPay 配置
     const MERCHANT_NO = process.env.POWERPAY_MERCHANT_NO || '300000004';
     const MD5_KEY = process.env.POWERPAY_MD5_KEY || '94ed508f4bc242b88ddd0f0d644ebe7a';
-    const API_URL = 'https://uat.powerpaygroup.com/gateway/pay';
+    const API_URL = 'https://www.powerpayhk.com/gateway/pay';  // 嘗試香港環境
 
     console.log('🔑 商戶號:', MERCHANT_NO);
     console.log('🔐 MD5 Key:', MD5_KEY);
